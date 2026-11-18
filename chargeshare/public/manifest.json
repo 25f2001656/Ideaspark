@@ -1,0 +1,10 @@
+{
+  "name": "ChargeShare — Mangaluru 2W EV Charging Network",
+  "short_name": "ChargeShare",
+  "description": "Community two-wheeler EV charging and parking-slot discovery for Mangaluru with offline QR check-in.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A1128",
+  "theme_color": "#0A1128",
+  "orientation": "portrait-primary"
+}
