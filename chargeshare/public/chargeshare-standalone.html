@@ -201,7 +201,7 @@
           </button>
         </nav>
         <div class="text-[11px] text-slate-400 flex items-center gap-3 py-1.5">
-          <span>Active Identity: <strong class="text-slate-200">Chirag Alva (Demo Account)</strong></span>
+          <span>Active Identity: <strong id="active-identity-label" class="text-slate-200">Chirag Alva (Demo Account)</strong></span>
           <span class="text-slate-600">•</span>
           <span>IndexedDB Cache: <strong id="idb-status-label" class="text-emerald-400">Ready</strong></span>
         </div>
@@ -1157,8 +1157,8 @@
                 CA
               </div>
               <div>
-                <h3 class="text-base font-extrabold">Chirag Alva</h3>
-                <p class="text-xs text-slate-400">chirag.demo@chargeshare.in • Mangaluru, KA (Asia/Kolkata)</p>
+                <h3 id="profile-auth-name" class="text-base font-extrabold">Chirag Alva</h3>
+                <p id="profile-auth-detail" class="text-xs text-slate-400">chirag.demo@chargeshare.in • Mangaluru, KA (Asia/Kolkata)</p>
               </div>
             </div>
             <span id="profile-active-role-badge" class="px-2.5 py-1 rounded-full text-xs font-extrabold bg-electric-500 text-navy-950">DRIVER MODE</span>
@@ -3599,6 +3599,71 @@
     }
 
     // --- 17. BOOTSTRAP ON WINDOW LOAD ---
+    async function syncLiveLocationsAndIdentity() {
+      if (!navigator.onLine) return;
+      try {
+        const [locationsResponse, authResponse] = await Promise.all([
+          fetch('/api/locations', { cache: 'no-store', credentials: 'same-origin' }),
+          fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
+        ]);
+
+        if (locationsResponse.ok) {
+          const data = await locationsResponse.json();
+          const liveLocations = (data.locations || []).map((row) => ({
+            id: row.id,
+            host_id: row.host_id,
+            host_name: row.host_name || 'ChargeShare Host',
+            name: row.name,
+            corridor: row.corridor || 'Derlakatte',
+            category: 'PARKING',
+            description: row.description || '',
+            latitude: Number(row.latitude),
+            longitude: Number(row.longitude),
+            socket_type: row.socket_type,
+            supported_sockets: [row.socket_type],
+            availability_status: Number(row.available) === 1 ? 'AVAILABLE' : 'UNAVAILABLE',
+            opening_time: row.opening_time || '08:00',
+            closing_time: row.closing_time || '20:00',
+            charge_and_dine: Number(row.charge_and_dine) === 1,
+            two_wheeler_friendly: true,
+            distance_km: 0,
+            rating: 4.5,
+            reviews_count: 0,
+            parking_details: row.address || '',
+            weather_protection: row.monsoon_photo_url ? 'Monsoon photo submitted' : '',
+            amenities: [],
+            available_slots: ['09:00', '12:00', '15:00', '18:00'],
+            monsoon_photo_url: row.monsoon_photo_url || '',
+            verification_status: row.verification_status || 'APPROVED',
+            is_demo: Number(row.is_demo_listing) === 1
+          }));
+
+          const demoLocations = appState.locations.filter((location) => location.is_demo);
+          const liveIds = new Set(liveLocations.map((location) => location.id));
+          const retainedDemoLocations = demoLocations.filter((location) => !liveIds.has(location.id));
+          appState.locations = [...liveLocations, ...retainedDemoLocations];
+          if (appState.locations.length > 0 && !appState.locations.some((location) => location.id === appState.selectedLocationId)) {
+            appState.selectedLocationId = appState.locations[0].id;
+          }
+          saveStateToStorage();
+        }
+
+        if (authResponse.ok) {
+          const authData = await authResponse.json();
+          if (authData.user) {
+            const identityLabel = document.getElementById('active-identity-label');
+            const profileName = document.getElementById('profile-auth-name');
+            const profileDetail = document.getElementById('profile-auth-detail');
+            if (identityLabel) identityLabel.textContent = `${authData.user.name} (${authData.user.role})`;
+            if (profileName) profileName.textContent = authData.user.name;
+            if (profileDetail) profileDetail.textContent = `${authData.user.email} • ${authData.user.role} • Mangaluru, KA (Asia/Kolkata)`;
+          }
+        }
+      } catch (error) {
+        // Keep the seeded and IndexedDB-backed offline experience usable.
+      }
+    }
+
     window.onload = async function () {
       await initIndexedDB();
       const saved = await loadStateFromStorage();
@@ -3608,6 +3673,7 @@
         buildSeededState();
         saveStateToStorage();
       }
+      await syncLiveLocationsAndIdentity();
 
       if (typeof lucide !== 'undefined' && lucide.createIcons) {
         lucide.createIcons();

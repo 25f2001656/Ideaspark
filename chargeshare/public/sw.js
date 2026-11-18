@@ -1,6 +1,6 @@
 // ChargeShare Service Worker — Offline Asset & Pass Caching
 const CACHE_NAME = 'chargeshare-mangaluru-pwa-v1';
-const APP_SHELL = ['/', '/manifest.json'];
+const APP_SHELL = ['/', '/manifest.json', '/chargeshare-standalone.html'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -20,6 +20,13 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then((cached) => {
       return (

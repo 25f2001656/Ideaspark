@@ -1,10 +1,12 @@
 // IndexedDB Offline Cache & Idempotent Sync Queue for ChargeShare
 const IDB_NAME = 'ChargeShareMangaluruDB';
 const IDB_VERSION = 1;
+let databasePromise: Promise<IDBDatabase | null> | null = null;
 
 export async function openChargeShareDB(): Promise<IDBDatabase | null> {
   if (typeof window === 'undefined' || !('indexedDB' in window)) return null;
-  return new Promise((resolve) => {
+  if (databasePromise) return databasePromise;
+  databasePromise = new Promise((resolve) => {
     const req = window.indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -12,9 +14,21 @@ export async function openChargeShareDB(): Promise<IDBDatabase | null> {
         db.createObjectStore('kv_store');
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onclose = () => { databasePromise = null; };
+      db.onversionchange = () => {
+        db.close();
+        databasePromise = null;
+      };
+      resolve(db);
+    };
+    req.onerror = () => {
+      databasePromise = null;
+      resolve(null);
+    };
   });
+  return databasePromise;
 }
 
 export async function saveOfflineState<T>(key: string, value: T): Promise<void> {
