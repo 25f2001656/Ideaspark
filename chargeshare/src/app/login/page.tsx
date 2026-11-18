@@ -31,7 +31,9 @@ export default function LoginPage() {
           <button className="btn primary full" type="submit">Log in</button>
         </form>
         <p className="muted" style={{ textAlign: 'center' }}>New to ChargeShare? <a href="/register">Create account</a></p>
-        <p className="muted" style={{ textAlign: 'center', fontSize: 13 }}>Demo admin: admin@chargeshare.local / Admin@123456</p>
+        {process.env.NODE_ENV !== 'production' && (
+          <p className="muted" style={{ textAlign: 'center', fontSize: 13 }}>Demo admin: admin@chargeshare.local / Admin@123456</p>
+        )}
       </div>
     </main>
   );

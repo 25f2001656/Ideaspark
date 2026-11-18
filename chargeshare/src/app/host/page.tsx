@@ -22,9 +22,9 @@ export default function HostPage() {
     const data = await response.json();
     if (!data.user) { window.location.href = '/login'; return; }
     if (data.user.role !== 'HOST') { window.location.href = '/dashboard'; return; }
-    const locationResponse = await fetch('/api/locations');
+    const locationResponse = await fetch('/api/locations?mine=1');
     const locationData = await locationResponse.json();
-    setLocations(locationData.locations.filter((item: Location) => item.host_id === data.user.id));
+    setLocations(locationData.locations);
   }
 
   useEffect(() => { load(); }, []);
@@ -58,11 +58,19 @@ export default function HostPage() {
   }
 
   async function setAvailability(location: Location, available: boolean) {
-    await fetch(`/api/locations/${location.id}`, {
+    setError('');
+    setMessage('');
+    const response = await fetch(`/api/locations/${location.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ available }),
     });
-    load();
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error || 'Could not update location availability.');
+      return;
+    }
+    setMessage('Location availability updated.');
+    await load();
   }
 
   const previewLat = Number(form.latitude) || 12.9141;

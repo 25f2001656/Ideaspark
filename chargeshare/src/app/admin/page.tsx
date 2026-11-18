@@ -1,10 +1,26 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { Profile, ChargingLocation } from '@/types/chargeshare';
+
+interface AdminUserRow extends Pick<Profile, 'id' | 'name' | 'email' | 'created_at'> {
+  role: Profile['active_role'];
+}
+
+interface AdminLocationRow {
+  id: string;
+  host_id: string;
+  name: string;
+  latitude: number | string;
+  longitude: number | string;
+  socket_type: ChargingLocation['socket_type'];
+  available: number | boolean;
+  updated_at: string;
+}
 
 export default function AdminPage() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [locations, setLocations] = useState<any[]>([]);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [locations, setLocations] = useState<AdminLocationRow[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -33,7 +49,7 @@ export default function AdminPage() {
           <table className="table">
             <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
             <tbody>{users.map(user => (
-              <tr key={user.id}><td>{user.name}</td><td>{user.email}</td><td><span className="badge">{user.role}</span></td><td>{new Date(user.created_at).toLocaleDateString()}</td></tr>
+              <tr key={user.id}><td>{user.name}</td><td>{user.email}</td><td><span className="badge">{user.role}</span></td><td>{new Date(user.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}</td></tr>
             ))}</tbody>
           </table>
         </div>
@@ -45,7 +61,7 @@ export default function AdminPage() {
               <tr key={location.id}>
                 <td>{location.name}</td><td>{location.socket_type}</td>
                 <td><span className={`badge ${location.available ? 'available' : 'offline'}`}>{location.available ? 'AVAILABLE' : 'OFFLINE'}</span></td>
-                <td>{location.latitude.toFixed(5)}, {location.longitude.toFixed(5)}</td>
+                <td>{Number.isFinite(Number(location.latitude)) ? Number(location.latitude).toFixed(5) : 'N/A'}, {Number.isFinite(Number(location.longitude)) ? Number(location.longitude).toFixed(5) : 'N/A'}</td>
               </tr>
             ))}</tbody>
           </table>
