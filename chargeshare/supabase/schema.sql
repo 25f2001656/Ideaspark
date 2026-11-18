@@ -121,8 +121,13 @@ CREATE POLICY "Drivers can create bookings"
   ON public.bookings FOR INSERT
   WITH CHECK (auth.uid() = driver_id);
 
-CREATE POLICY "Session access for booking participants"
-  ON public.sessions FOR ALL
+DROP POLICY IF EXISTS "Session access for booking participants" ON public.sessions;
+DROP POLICY IF EXISTS "Participants can view sessions" ON public.sessions;
+DROP POLICY IF EXISTS "Booking participants can create sessions" ON public.sessions;
+DROP POLICY IF EXISTS "Booking participants can update session status" ON public.sessions;
+
+CREATE POLICY "Participants can view sessions"
+  ON public.sessions FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM public.bookings b
@@ -131,13 +136,74 @@ CREATE POLICY "Session access for booking participants"
     )
   );
 
+CREATE POLICY "Booking participants can create sessions"
+  ON public.sessions FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.bookings b
+      LEFT JOIN public.charging_locations cl ON cl.id = b.location_id
+      WHERE b.id = sessions.booking_id AND (b.driver_id = auth.uid() OR cl.host_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Booking participants can update session status"
+  ON public.sessions FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.bookings b
+      LEFT JOIN public.charging_locations cl ON cl.id = b.location_id
+      WHERE b.id = sessions.booking_id AND (b.driver_id = auth.uid() OR cl.host_id = auth.uid())
+    )
+  )
+  WITH CHECK (
+    idle_fee >= 0
+  );
+
+CREATE OR REPLACE FUNCTION public.prevent_idle_fee_reset()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.idle_fee < OLD.idle_fee THEN
+    RAISE EXCEPTION 'idle_fee cannot be decreased';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS prevent_idle_fee_reset_trigger ON public.sessions;
+CREATE TRIGGER prevent_idle_fee_reset_trigger
+  BEFORE UPDATE ON public.sessions
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_idle_fee_reset();
+
+CREATE POLICY "Users can view their own profile"
+  ON public.profiles FOR SELECT
+  USING (auth.uid() = id);
+
+CREATE POLICY "Users can update their own profile"
+  ON public.profiles FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
+
 CREATE POLICY "Hosts can view their own payouts"
   ON public.payouts FOR SELECT
   USING (auth.uid() = host_id);
 
-CREATE POLICY "Participants can view and append activity logs"
-  ON public.activity_logs FOR ALL
+CREATE POLICY "Participants can view activity logs"
+  ON public.activity_logs FOR SELECT
   USING (
+    EXISTS (
+      SELECT 1 FROM public.bookings b
+      LEFT JOIN public.charging_locations cl ON cl.id = b.location_id
+      WHERE b.id = activity_logs.booking_id AND (b.driver_id = auth.uid() OR cl.host_id = auth.uid())
+    )
+  );
+
+CREATE POLICY "Participants can append activity logs"
+  ON public.activity_logs FOR INSERT
+  WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.bookings b
       LEFT JOIN public.charging_locations cl ON cl.id = b.location_id

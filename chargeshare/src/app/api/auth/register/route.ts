@@ -4,7 +4,12 @@ import { getDb } from '@/lib/db';
 import { createSession, hashPassword, setSessionCookie } from '@/lib/auth';
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON request body.' }, { status: 400 });
+  }
   const name = String(body.name || '').trim();
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
@@ -23,7 +28,7 @@ export async function POST(request: Request) {
 
   const id = crypto.randomUUID();
   db.prepare('INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-    id, name, email, hashPassword(password), role, new Date().toISOString(),
+    id, name, email, await hashPassword(password), role, new Date().toISOString(),
   );
   setSessionCookie(createSession({ id, name, email, role }));
   return NextResponse.json({ ok: true, user: { id, name, email, role } });

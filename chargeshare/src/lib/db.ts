@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 
 declare global {
   var chargeshareDb: Database.Database | undefined;
@@ -10,8 +11,18 @@ declare global {
 export function getDb() {
   if (global.chargeshareDb) return global.chargeshareDb;
 
-  const dataDir = path.join(process.cwd(), 'data');
-  fs.mkdirSync(dataDir, { recursive: true });
+  let dataDir = path.join(process.cwd(), 'data');
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EROFS' || code === 'EACCES' || code === 'EPERM') {
+      dataDir = path.join(os.tmpdir(), 'chargeshare-data');
+      fs.mkdirSync(dataDir, { recursive: true });
+    } else {
+      throw error;
+    }
+  }
   const db = new Database(path.join(dataDir, 'chargeshare.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
@@ -38,11 +49,35 @@ export function getDb() {
       address TEXT NOT NULL DEFAULT '',
       opening_time TEXT NOT NULL DEFAULT '08:00',
       closing_time TEXT NOT NULL DEFAULT '20:00',
+      corridor TEXT NOT NULL DEFAULT 'Derlakatte',
+      charge_and_dine INTEGER NOT NULL DEFAULT 0,
+      monsoon_photo_url TEXT NOT NULL DEFAULT '',
+      verification_status TEXT NOT NULL DEFAULT 'APPROVED' CHECK(verification_status IN ('PENDING','APPROVED','REJECTED')),
+      is_demo_listing INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY(host_id) REFERENCES users(id)
     );
   `);
+
+  const migrations = [
+    "ALTER TABLE charging_locations ADD COLUMN corridor TEXT NOT NULL DEFAULT 'Derlakatte'",
+    'ALTER TABLE charging_locations ADD COLUMN charge_and_dine INTEGER NOT NULL DEFAULT 0',
+  ];
+  migrations.push(
+  );
+  migrations.push(
+    "ALTER TABLE charging_locations ADD COLUMN monsoon_photo_url TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE charging_locations ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'APPROVED' CHECK(verification_status IN ('PENDING','APPROVED','REJECTED'))",
+    'ALTER TABLE charging_locations ADD COLUMN is_demo_listing INTEGER NOT NULL DEFAULT 0',
+  );
+  for (const statement of migrations) {
+    try {
+      db.exec(statement);
+    } catch {
+      // Existing databases already contain this column.
+    }
+  }
 
   const adminEmail = (process.env.ADMIN_EMAIL || 'admin@chargeshare.local').trim().toLowerCase();
   const existingAdmin = db.prepare('SELECT id FROM users WHERE role = ? LIMIT 1').get('ADMIN');
